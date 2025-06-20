@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -37,20 +38,18 @@
     --radius: 0.5rem;
 
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Avatar-specific colors */
+    --peach-100: 254 247 238;
+    --peach-200: 252 237 218;
+    --peach-300: 250 227 198;
   }
 
   .dark {
@@ -100,4 +99,37 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+@layer utilities {
+  .peach-100 {
+    @apply bg-orange-50;
+  }
+  
+  .peach-200 {
+    @apply bg-orange-100;
+  }
+  
+  .peach-300 {
+    @apply bg-orange-200;
+  }
+}
+
+/* Avatar-specific animations */
+@keyframes subtle-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+
+.avatar-float {
+  animation: subtle-float 4s ease-in-out infinite;
+}
+
+.avatar-blink {
+  animation: blink 0.15s ease-in-out;
 }
