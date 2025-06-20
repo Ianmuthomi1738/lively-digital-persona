@@ -36,8 +36,8 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
     return new Promise(async (resolve, reject) => {
       try {
         await speak(text, (viseme: string) => {
-          // Map visemes to mouth shapes for lip-sync
-          const visemeMap: Record<string, string> = {
+          // Map visemes to mouth shapes for lip-sync with proper typing
+          const visemeMap: Record<string, 'closed' | 'small' | 'open' | 'wide' | 'rounded' | 'smile'> = {
             'sil': 'closed',
             'AE': 'open',
             'AH': 'wide',
@@ -50,7 +50,8 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
             'UH': 'small',
             'UW': 'rounded'
           };
-          setMouthState(visemeMap[viseme] || 'small');
+          const mouthShape = visemeMap[viseme] || 'small';
+          setMouthState(mouthShape);
         });
         resolve();
       } catch (error) {
