@@ -77,10 +77,11 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
   return (
     <div 
       ref={containerRef}
-      className="relative w-80 h-96 bg-gradient-to-b from-pink-100 to-peach-100 rounded-full overflow-hidden shadow-2xl"
+      className="relative w-80 h-96 bg-gradient-to-b from-sky-100 via-sky-50 to-white rounded-full overflow-hidden shadow-2xl border-4 border-white/50"
       style={{
         transform: `rotate(${headTilt}deg)`,
-        transition: 'transform 0.5s ease-out'
+        transition: 'transform 0.5s ease-out',
+        backgroundImage: 'radial-gradient(circle at 30% 20%, rgba(255,255,255,0.8) 0%, transparent 70%)'
       }}
     >
       <AvatarFace
