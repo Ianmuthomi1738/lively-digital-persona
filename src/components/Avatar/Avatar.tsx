@@ -1,7 +1,8 @@
 
-import React, { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, forwardRef, useImperativeHandle } from 'react';
 import { AvatarAPI } from './AvatarAPI';
 import { SiriAvatar } from './SiriAvatar';
+import { VoiceSettings } from './VoiceSettings';
 import { useSpeechSynthesis } from './hooks/useSpeechSynthesis';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 
@@ -17,6 +18,7 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
   const { speak, isSpeaking } = useSpeechSynthesis();
   const { listen } = useSpeechRecognition();
   const [isListening, setIsListening] = React.useState(false);
+  const [voiceStyle, setVoiceStyle] = React.useState('natural');
 
   useEffect(() => {
     onSpeakingStateChange?.(isSpeaking);
@@ -43,7 +45,6 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
   };
 
   const handleSetExpression = (expr: typeof expression): void => {
-    // Expression changes are now handled through the Siri-style animation states
     console.log('Expression changed to:', expr);
   };
 
@@ -54,19 +55,33 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
   }));
 
   return (
-    <div className="relative w-96 h-96 flex items-center justify-center">
-      {/* Beautiful gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-3xl overflow-hidden">
-        {/* Animated background patterns */}
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute top-1/4 left-1/4 w-32 h-32 bg-purple-500/20 rounded-full blur-xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-24 h-24 bg-blue-500/20 rounded-full blur-xl animate-pulse delay-1000" />
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-gradient-radial from-white/5 to-transparent rounded-full" />
+    <div className="relative w-full max-w-md mx-auto flex flex-col items-center justify-center p-4 sm:p-6">
+      {/* Enhanced mobile-optimized background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden">
+        {/* Responsive animated background patterns */}
+        <div className="absolute inset-0 opacity-20 sm:opacity-30">
+          <div className="absolute top-1/4 left-1/4 w-20 h-20 sm:w-32 sm:h-32 bg-purple-500/20 rounded-full blur-xl animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-16 h-16 sm:w-24 sm:h-24 bg-blue-500/20 rounded-full blur-xl animate-pulse delay-1000" />
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-28 h-28 sm:w-40 sm:h-40 bg-gradient-radial from-white/5 to-transparent rounded-full" />
         </div>
       </div>
 
-      {/* Siri-style avatar */}
-      <SiriAvatar isSpeaking={isSpeaking} isListening={isListening} />
+      {/* Settings button - positioned for mobile accessibility */}
+      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
+        <VoiceSettings 
+          currentVoice={voiceStyle}
+          onVoiceChange={setVoiceStyle}
+        />
+      </div>
+
+      {/* Enhanced Siri-style avatar with mobile optimization */}
+      <div className="relative z-0 flex items-center justify-center">
+        <SiriAvatar 
+          isSpeaking={isSpeaking} 
+          isListening={isListening}
+          voiceStyle={voiceStyle}
+        />
+      </div>
     </div>
   );
 });
