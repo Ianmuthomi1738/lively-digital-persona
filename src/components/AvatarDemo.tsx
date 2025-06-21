@@ -1,10 +1,11 @@
 
 import React, { useState, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Avatar } from './Avatar/Avatar';
 import { AvatarAPI } from './Avatar/AvatarAPI';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Code } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const AvatarDemo: React.FC = () => {
@@ -113,6 +114,16 @@ export const AvatarDemo: React.FC = () => {
             {isSpeaking ? <VolumeX className="w-4 h-4 mr-2" /> : <Volume2 className="w-4 h-4 mr-2" />}
             {isSpeaking ? 'Speaking...' : 'Test Voice'}
           </Button>
+        </div>
+
+        {/* API Demo Link */}
+        <div className="mt-4">
+          <Link to="/api-demo">
+            <Button variant="outline" className="bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20">
+              <Code className="w-4 h-4 mr-2" />
+              Try API Playground
+            </Button>
+          </Link>
         </div>
       </div>
 
