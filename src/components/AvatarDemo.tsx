@@ -82,11 +82,6 @@ export const AvatarDemo: React.FC = () => {
     }
   };
 
-  const handleExpressionChange = (expression: typeof currentExpression) => {
-    setCurrentExpression(expression);
-    avatarRef.current?.setExpression(expression);
-  };
-
   return (
     <div className="flex flex-col lg:flex-row gap-8 p-6 max-w-7xl mx-auto">
       {/* Avatar Section */}
@@ -118,21 +113,6 @@ export const AvatarDemo: React.FC = () => {
             {isSpeaking ? <VolumeX className="w-4 h-4 mr-2" /> : <Volume2 className="w-4 h-4 mr-2" />}
             {isSpeaking ? 'Speaking...' : 'Test Voice'}
           </Button>
-        </div>
-
-        {/* Expression Controls */}
-        <div className="mt-4 flex gap-2 flex-wrap justify-center">
-          {(['neutral', 'happy', 'sad', 'thinking', 'surprised'] as const).map((expr) => (
-            <Button
-              key={expr}
-              variant={currentExpression === expr ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => handleExpressionChange(expr)}
-              className="capitalize"
-            >
-              {expr}
-            </Button>
-          ))}
         </div>
       </div>
 
