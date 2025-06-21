@@ -20,37 +20,31 @@ export const useAudioAnalyzer = (isActive: boolean) => {
   const analyzerRef = useRef<AnalyserNode | null>(null);
   const animationRef = useRef<number>();
   const rhythmHistory = useRef<number[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
-  const initializeAudioContext = useCallback(async () => {
-    try {
-      if (!audioContextRef.current) {
-        // Handle webkit prefix properly
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        audioContextRef.current = new AudioContextClass();
-        analyzerRef.current = audioContextRef.current.createAnalyser();
-        analyzerRef.current.fftSize = 64;
-        analyzerRef.current.smoothingTimeConstant = 0.8;
-      }
-
-      // Try to capture microphone for listening mode
-      if (isActive) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const source = audioContextRef.current.createMediaStreamSource(stream);
-        source.connect(analyzerRef.current);
-      }
-    } catch (error) {
-      console.log('Microphone access not available, using simulated data');
+  const cleanup = useCallback(() => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = undefined;
     }
-  }, [isActive]);
+    
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+  }, []);
 
   const analyzeAudio = useCallback(() => {
     if (!analyzerRef.current) return;
 
-    // Use Uint8Array for byte data methods
     const frequencies = new Uint8Array(analyzerRef.current.frequencyBinCount);
     const timeDomain = new Uint8Array(analyzerRef.current.fftSize);
     
-    // Use correct Web Audio API method names
     analyzerRef.current.getByteFrequencyData(frequencies);
     analyzerRef.current.getByteTimeDomainData(timeDomain);
 
@@ -82,7 +76,6 @@ export const useAudioAnalyzer = (isActive: boolean) => {
     const avgVolume = rhythmHistory.current.reduce((a, b) => a + b, 0) / rhythmHistory.current.length;
     const rhythm = volume > avgVolume * 1.2 ? 1 : 0;
 
-    // Convert Uint8Array to Float32Array for the interface
     const floatFrequencies = new Float32Array(frequencies);
 
     setAudioData({
@@ -95,22 +88,37 @@ export const useAudioAnalyzer = (isActive: boolean) => {
     animationRef.current = requestAnimationFrame(analyzeAudio);
   }, []);
 
+  const initializeAudioContext = useCallback(async () => {
+    try {
+      cleanup();
+      
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      audioContextRef.current = new AudioContextClass();
+      analyzerRef.current = audioContextRef.current.createAnalyser();
+      analyzerRef.current.fftSize = 64;
+      analyzerRef.current.smoothingTimeConstant = 0.8;
+
+      if (isActive) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+        const source = audioContextRef.current.createMediaStreamSource(stream);
+        source.connect(analyzerRef.current);
+      }
+    } catch (error) {
+      console.log('Microphone access not available, using simulated data');
+    }
+  }, [isActive, cleanup]);
+
   useEffect(() => {
     if (isActive) {
       initializeAudioContext();
       analyzeAudio();
     } else {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
+      cleanup();
     }
 
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [isActive, initializeAudioContext, analyzeAudio]);
+    return cleanup;
+  }, [isActive, initializeAudioContext, analyzeAudio, cleanup]);
 
   return audioData;
 };
