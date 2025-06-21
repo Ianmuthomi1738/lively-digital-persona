@@ -24,7 +24,9 @@ export const useAudioAnalyzer = (isActive: boolean) => {
   const initializeAudioContext = useCallback(async () => {
     try {
       if (!audioContextRef.current) {
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        // Handle webkit prefix properly
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioContextClass();
         analyzerRef.current = audioContextRef.current.createAnalyser();
         analyzerRef.current.fftSize = 64;
         analyzerRef.current.smoothingTimeConstant = 0.8;
@@ -47,13 +49,15 @@ export const useAudioAnalyzer = (isActive: boolean) => {
     const frequencies = new Float32Array(analyzerRef.current.frequencyBinCount);
     const timeDomain = new Float32Array(analyzerRef.current.fftSize);
     
-    analyzerRef.current.getFrequencyData(frequencies);
-    analyzerRef.current.getTimeDomainData(timeDomain);
+    // Use correct Web Audio API method names
+    analyzerRef.current.getByteFrequencyData(frequencies);
+    analyzerRef.current.getByteTimeDomainData(timeDomain);
 
     // Calculate volume (RMS)
     let sum = 0;
     for (let i = 0; i < timeDomain.length; i++) {
-      sum += timeDomain[i] * timeDomain[i];
+      const normalized = (timeDomain[i] - 128) / 128;
+      sum += normalized * normalized;
     }
     const volume = Math.sqrt(sum / timeDomain.length);
 
