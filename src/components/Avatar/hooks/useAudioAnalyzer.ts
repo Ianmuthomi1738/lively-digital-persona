@@ -46,8 +46,9 @@ export const useAudioAnalyzer = (isActive: boolean) => {
   const analyzeAudio = useCallback(() => {
     if (!analyzerRef.current) return;
 
-    const frequencies = new Float32Array(analyzerRef.current.frequencyBinCount);
-    const timeDomain = new Float32Array(analyzerRef.current.fftSize);
+    // Use Uint8Array for byte data methods
+    const frequencies = new Uint8Array(analyzerRef.current.frequencyBinCount);
+    const timeDomain = new Uint8Array(analyzerRef.current.fftSize);
     
     // Use correct Web Audio API method names
     analyzerRef.current.getByteFrequencyData(frequencies);
@@ -81,8 +82,11 @@ export const useAudioAnalyzer = (isActive: boolean) => {
     const avgVolume = rhythmHistory.current.reduce((a, b) => a + b, 0) / rhythmHistory.current.length;
     const rhythm = volume > avgVolume * 1.2 ? 1 : 0;
 
+    // Convert Uint8Array to Float32Array for the interface
+    const floatFrequencies = new Float32Array(frequencies);
+
     setAudioData({
-      frequencies,
+      frequencies: floatFrequencies,
       volume: volume * 100,
       dominantFrequency,
       rhythm
