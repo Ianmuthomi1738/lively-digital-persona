@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 
 export const useSpeechSynthesis = () => {
@@ -20,33 +21,18 @@ export const useSpeechSynthesis = () => {
       utterance.pitch = 1.1;
       utterance.volume = 0.8;
 
-      // Enhanced female voice selection with better priority
+      // Try to use a female voice
       const voices = speechSynthesis.getVoices();
       const femaleVoice = voices.find(voice => 
-        // First priority: explicitly named female voices
-        voice.name.toLowerCase().includes('female') ||
-        voice.name.toLowerCase().includes('woman') ||
-        voice.name.toLowerCase().includes('samantha') ||
-        voice.name.toLowerCase().includes('karen') ||
-        voice.name.toLowerCase().includes('victoria') ||
-        voice.name.toLowerCase().includes('susan') ||
-        voice.name.toLowerCase().includes('alice') ||
-        voice.name.toLowerCase().includes('emma') ||
-        voice.name.toLowerCase().includes('sophia') ||
-        voice.name.toLowerCase().includes('sara') ||
-        voice.name.toLowerCase().includes('sarah') ||
-        voice.name.toLowerCase().includes('zira') ||
-        voice.name.toLowerCase().includes('cortana') ||
-        voice.name.toLowerCase().includes('kate') ||
-        voice.name.toLowerCase().includes('hazel')
+        voice.name.includes('Female') || 
+        voice.name.includes('Woman') ||
+        voice.name.includes('Samantha') ||
+        voice.name.includes('Karen') ||
+        voice.name.includes('Victoria')
       );
       
-      // Set the female voice as default, fallback to system default if none found
       if (femaleVoice) {
         utterance.voice = femaleVoice;
-        console.log('Selected female voice:', femaleVoice.name);
-      } else {
-        console.log('No female voice found, using system default');
       }
 
       utterance.onstart = () => {
