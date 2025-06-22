@@ -1,6 +1,6 @@
 
 import { useRef, useEffect, useState } from 'react';
-import { AvatarSDK, AvatarConfig, AvatarEventHandlers, ConversationMessage } from './AvatarSDK';
+import { AvatarSDK, AvatarConfig, AvatarEventHandlers, ConversationMessage, SpeechOptions } from './AvatarSDK';
 
 export const useAvatarSDK = (config?: AvatarConfig, eventHandlers?: AvatarEventHandlers) => {
   const sdkRef = useRef<AvatarSDK | null>(null);
@@ -8,16 +8,19 @@ export const useAvatarSDK = (config?: AvatarConfig, eventHandlers?: AvatarEventH
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
+  const [canInterrupt, setCanInterrupt] = useState(false);
 
   useEffect(() => {
     const enhancedHandlers = {
       ...eventHandlers,
       onSpeakStart: () => {
         setIsSpeaking(true);
+        setCanInterrupt(true);
         eventHandlers?.onSpeakStart?.();
       },
       onSpeakEnd: () => {
         setIsSpeaking(false);
+        setCanInterrupt(false);
         eventHandlers?.onSpeakEnd?.();
       },
       onListenStart: () => {
@@ -31,6 +34,11 @@ export const useAvatarSDK = (config?: AvatarConfig, eventHandlers?: AvatarEventH
       onTranscriptReceived: (transcript: string) => {
         setConversation(prev => [...prev]);
         eventHandlers?.onTranscriptReceived?.(transcript);
+      },
+      onInterrupted: () => {
+        setIsSpeaking(false);
+        setCanInterrupt(false);
+        eventHandlers?.onInterrupted?.();
       }
     };
 
@@ -46,8 +54,8 @@ export const useAvatarSDK = (config?: AvatarConfig, eventHandlers?: AvatarEventH
     setIsReady(true);
   };
 
-  const speak = async (text: string) => {
-    await sdkRef.current?.speak(text);
+  const speak = async (text: string, options?: SpeechOptions) => {
+    await sdkRef.current?.speak(text, options);
     setConversation(sdkRef.current?.getConversation() || []);
   };
 
@@ -59,6 +67,10 @@ export const useAvatarSDK = (config?: AvatarConfig, eventHandlers?: AvatarEventH
 
   const setExpression = (expression: 'neutral' | 'happy' | 'sad' | 'thinking' | 'surprised') => {
     sdkRef.current?.setExpression(expression);
+  };
+
+  const interrupt = () => {
+    sdkRef.current?.interrupt();
   };
 
   const clearConversation = () => {
@@ -73,9 +85,11 @@ export const useAvatarSDK = (config?: AvatarConfig, eventHandlers?: AvatarEventH
     listen,
     setExpression,
     clearConversation,
+    interrupt,
     isReady,
     isSpeaking,
     isListening,
-    conversation
+    conversation,
+    canInterrupt
   };
 };

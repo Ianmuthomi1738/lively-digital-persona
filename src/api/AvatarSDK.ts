@@ -1,4 +1,3 @@
-
 export interface AvatarConfig {
   voiceStyle?: 'natural' | 'expressive' | 'professional' | 'friendly' | 'energetic';
   initialExpression?: 'neutral' | 'happy' | 'sad' | 'thinking' | 'surprised';
@@ -14,6 +13,19 @@ export interface ConversationMessage {
   id: string;
 }
 
+export interface VoiceEmotion {
+  type: 'neutral' | 'happy' | 'sad' | 'excited' | 'whisper' | 'laugh' | 'angry' | 'surprised';
+  intensity?: number; // 0.1 to 1.0
+}
+
+export interface SpeechOptions {
+  emotion?: VoiceEmotion;
+  onViseme?: (viseme: string) => void;
+  onStart?: () => void;
+  onEnd?: () => void;
+  onInterrupted?: () => void;
+}
+
 export interface AvatarEventHandlers {
   onSpeakStart?: () => void;
   onSpeakEnd?: () => void;
@@ -22,10 +34,11 @@ export interface AvatarEventHandlers {
   onTranscriptReceived?: (transcript: string) => void;
   onExpressionChange?: (expression: string) => void;
   onError?: (error: Error) => void;
+  onInterrupted?: () => void;
 }
 
 export interface AvatarSDKInstance {
-  speak(text: string): Promise<void>;
+  speak(text: string, options?: SpeechOptions): Promise<void>;
   listen(): Promise<string>;
   setExpression(expression: 'neutral' | 'happy' | 'sad' | 'thinking' | 'surprised'): void;
   setVoiceStyle(style: string): void;
@@ -33,6 +46,8 @@ export interface AvatarSDKInstance {
   clearConversation(): void;
   isReady(): boolean;
   destroy(): void;
+  interrupt(): void;
+  canInterrupt: boolean;
 }
 
 export class AvatarSDK {
@@ -59,14 +74,20 @@ export class AvatarSDK {
     this.isInitialized = true;
   }
 
-  async speak(text: string): Promise<void> {
+  async speak(text: string, options: SpeechOptions = {}): Promise<void> {
     if (!this.isInitialized || !this.avatarRef) {
       throw new Error('Avatar not initialized. Make sure to connect the SDK to an Avatar component.');
     }
 
     try {
       this.eventHandlers.onSpeakStart?.();
-      await this.avatarRef.speak(text);
+      await this.avatarRef.speak(text, {
+        ...options,
+        onInterrupted: () => {
+          this.eventHandlers.onInterrupted?.();
+          options.onInterrupted?.();
+        }
+      });
       
       // Add to conversation
       this.addMessage('assistant', text);
@@ -111,6 +132,17 @@ export class AvatarSDK {
 
   setVoiceStyle(style: string): void {
     this.config.voiceStyle = style as any;
+  }
+
+  interrupt(): void {
+    if (!this.isInitialized || !this.avatarRef) {
+      throw new Error('Avatar not initialized.');
+    }
+    this.avatarRef.interrupt();
+  }
+
+  get canInterrupt(): boolean {
+    return this.isInitialized && this.avatarRef?.canInterrupt || false;
   }
 
   getConversation(): ConversationMessage[] {

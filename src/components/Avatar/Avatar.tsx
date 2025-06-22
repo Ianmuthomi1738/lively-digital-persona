@@ -1,6 +1,6 @@
 
 import React, { useEffect, forwardRef, useImperativeHandle } from 'react';
-import { AvatarAPI } from './AvatarAPI';
+import { AvatarAPI, SpeechOptions } from './AvatarAPI';
 import { SiriAvatar } from './SiriAvatar';
 import { VoiceSettings } from './VoiceSettings';
 import { useSpeechSynthesis } from './hooks/useSpeechSynthesis';
@@ -9,13 +9,15 @@ import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 interface AvatarProps {
   expression?: 'neutral' | 'happy' | 'sad' | 'thinking' | 'surprised';
   onSpeakingStateChange?: (isSpeaking: boolean) => void;
+  onInterrupted?: () => void;
 }
 
 export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({ 
   expression = 'neutral',
-  onSpeakingStateChange 
+  onSpeakingStateChange,
+  onInterrupted
 }, ref) => {
-  const { speak, isSpeaking } = useSpeechSynthesis();
+  const { speak, isSpeaking, interrupt, canInterrupt } = useSpeechSynthesis();
   const { listen } = useSpeechRecognition();
   const [isListening, setIsListening] = React.useState(false);
   const [voiceStyle, setVoiceStyle] = React.useState('natural');
@@ -24,10 +26,16 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
     onSpeakingStateChange?.(isSpeaking);
   }, [isSpeaking, onSpeakingStateChange]);
 
-  const handleSpeak = async (text: string): Promise<void> => {
+  const handleSpeak = async (text: string, options: SpeechOptions = {}): Promise<void> => {
     return new Promise(async (resolve, reject) => {
       try {
-        await speak(text);
+        await speak(text, {
+          ...options,
+          onInterrupted: () => {
+            onInterrupted?.();
+            options.onInterrupted?.();
+          }
+        });
         resolve();
       } catch (error) {
         reject(error);
@@ -48,10 +56,16 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
     console.log('Expression changed to:', expr);
   };
 
+  const handleInterrupt = (): void => {
+    interrupt();
+  };
+
   useImperativeHandle(ref, () => ({
     speak: handleSpeak,
     listen: handleListen,
-    setExpression: handleSetExpression
+    setExpression: handleSetExpression,
+    interrupt: handleInterrupt,
+    canInterrupt
   }));
 
   return (
@@ -73,6 +87,18 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
           onVoiceChange={setVoiceStyle}
         />
       </div>
+
+      {/* Interrupt button when speaking */}
+      {canInterrupt && (
+        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10">
+          <button
+            onClick={handleInterrupt}
+            className="bg-red-500/80 hover:bg-red-600/80 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium transition-all duration-200 shadow-lg"
+          >
+            Stop
+          </button>
+        </div>
+      )}
 
       {/* Enhanced Siri-style avatar with mobile optimization */}
       <div className="relative z-0 flex items-center justify-center">
