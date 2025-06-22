@@ -1,3 +1,4 @@
+
 import { useState, useCallback } from 'react';
 
 export const useSpeechSynthesis = () => {
@@ -15,56 +16,95 @@ export const useSpeechSynthesis = () => {
 
       const utterance = new SpeechSynthesisUtterance(text);
       
-      // Configure voice settings
-      utterance.rate = 0.9;
-      utterance.pitch = 1.1;
-      utterance.volume = 0.8;
+      // Enhanced voice settings for more realistic speech
+      utterance.rate = 0.85; // Slightly slower for more natural pace
+      utterance.pitch = 1.0; // More neutral pitch
+      utterance.volume = 0.9; // Higher volume for clarity
 
-      // Enhanced female voice selection with better priority
-      const voices = speechSynthesis.getVoices();
-      const femaleVoice = voices.find(voice => 
-        // First priority: explicitly named female voices
-        voice.name.toLowerCase().includes('female') ||
-        voice.name.toLowerCase().includes('woman') ||
-        voice.name.toLowerCase().includes('samantha') ||
-        voice.name.toLowerCase().includes('karen') ||
-        voice.name.toLowerCase().includes('victoria') ||
-        voice.name.toLowerCase().includes('susan') ||
-        voice.name.toLowerCase().includes('alice') ||
-        voice.name.toLowerCase().includes('emma') ||
-        voice.name.toLowerCase().includes('sophia') ||
-        voice.name.toLowerCase().includes('sara') ||
-        voice.name.toLowerCase().includes('sarah') ||
-        voice.name.toLowerCase().includes('zira') ||
-        voice.name.toLowerCase().includes('cortana') ||
-        voice.name.toLowerCase().includes('kate') ||
-        voice.name.toLowerCase().includes('hazel')
-      );
-      
-      // Set the female voice as default, fallback to system default if none found
-      if (femaleVoice) {
-        utterance.voice = femaleVoice;
-        console.log('Selected female voice:', femaleVoice.name);
+      // Wait for voices to load before selecting
+      const selectVoice = () => {
+        const voices = speechSynthesis.getVoices();
+        
+        // Priority order for more natural female voices
+        const preferredVoices = [
+          'Samantha', 'Karen', 'Victoria', 'Susan', 'Zira',
+          'Microsoft Zira', 'Google US English Female',
+          'Alex', 'Fiona', 'Moira', 'Tessa'
+        ];
+
+        let selectedVoice = null;
+
+        // First, try to find exact matches from preferred list
+        for (const preferredName of preferredVoices) {
+          selectedVoice = voices.find(voice => 
+            voice.name.toLowerCase().includes(preferredName.toLowerCase())
+          );
+          if (selectedVoice) break;
+        }
+
+        // If no preferred voice found, look for any female-sounding voice
+        if (!selectedVoice) {
+          selectedVoice = voices.find(voice => 
+            voice.name.toLowerCase().includes('female') ||
+            voice.name.toLowerCase().includes('woman') ||
+            voice.name.toLowerCase().includes('emma') ||
+            voice.name.toLowerCase().includes('sophia') ||
+            voice.name.toLowerCase().includes('sara') ||
+            voice.name.toLowerCase().includes('sarah') ||
+            voice.name.toLowerCase().includes('alice') ||
+            voice.name.toLowerCase().includes('kate') ||
+            voice.name.toLowerCase().includes('hazel')
+          );
+        }
+
+        // Fallback to any English voice
+        if (!selectedVoice) {
+          selectedVoice = voices.find(voice => 
+            voice.lang.includes('en') && !voice.name.toLowerCase().includes('male')
+          );
+        }
+
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+          console.log('Selected voice:', selectedVoice.name, 'Language:', selectedVoice.lang);
+        } else {
+          console.log('Using system default voice');
+        }
+      };
+
+      // Handle voice loading
+      if (speechSynthesis.getVoices().length === 0) {
+        speechSynthesis.onvoiceschanged = () => {
+          selectVoice();
+          speechSynthesis.onvoiceschanged = null; // Remove listener
+        };
       } else {
-        console.log('No female voice found, using system default');
+        selectVoice();
       }
 
       utterance.onstart = () => {
         setIsSpeaking(true);
-        // Simple viseme simulation based on speech timing
+        // Improved viseme simulation with more natural timing
         if (onViseme) {
           const words = text.split(' ');
           let wordIndex = 0;
+          const avgWordsPerMinute = 150; // More realistic speaking pace
+          const msPerWord = (60 * 1000) / avgWordsPerMinute;
+          
           const visemeInterval = setInterval(() => {
             if (wordIndex < words.length) {
               const word = words[wordIndex];
-              // Simple viseme mapping based on word characteristics
-              if (word.toLowerCase().includes('o') || word.toLowerCase().includes('u')) {
+              // Enhanced viseme mapping for more natural lip sync
+              if (/[ou]/i.test(word)) {
                 onViseme('OW');
-              } else if (word.toLowerCase().includes('a')) {
+              } else if (/[aeiæ]/i.test(word)) {
                 onViseme('AH');
-              } else if (word.toLowerCase().includes('e') || word.toLowerCase().includes('i')) {
+              } else if (/[eiy]/i.test(word)) {
                 onViseme('IY');
+              } else if (/[bp]/i.test(word)) {
+                onViseme('P');
+              } else if (/[fv]/i.test(word)) {
+                onViseme('F');
               } else {
                 onViseme('AE');
               }
@@ -73,7 +113,7 @@ export const useSpeechSynthesis = () => {
               clearInterval(visemeInterval);
               onViseme('sil');
             }
-          }, 300);
+          }, msPerWord);
         }
       };
 
@@ -87,7 +127,10 @@ export const useSpeechSynthesis = () => {
         reject(new Error(`Speech synthesis error: ${event.error}`));
       };
 
-      speechSynthesis.speak(utterance);
+      // Add pause before speaking for more natural flow
+      setTimeout(() => {
+        speechSynthesis.speak(utterance);
+      }, 100);
     });
   }, []);
 
