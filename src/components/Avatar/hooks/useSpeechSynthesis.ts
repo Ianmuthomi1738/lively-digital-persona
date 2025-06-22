@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 
 export const useSpeechSynthesis = () => {
@@ -35,15 +34,7 @@ export const useSpeechSynthesis = () => {
         voice.name.toLowerCase().includes('emma') ||
         voice.name.toLowerCase().includes('sophia') ||
         voice.name.toLowerCase().includes('sara') ||
-        voice.name.toLowerCase().includes('sarah')
-      ) || voices.find(voice => 
-        // Second priority: voices that are typically female based on language/region
-        (voice.lang.startsWith('en') && voice.name.toLowerCase().includes('default') && voice.gender === 'female')
-      ) || voices.find(voice => 
-        // Third priority: any voice with female gender property
-        voice.gender === 'female'
-      ) || voices.find(voice => 
-        // Fourth priority: common female voice patterns
+        voice.name.toLowerCase().includes('sarah') ||
         voice.name.toLowerCase().includes('zira') ||
         voice.name.toLowerCase().includes('cortana') ||
         voice.name.toLowerCase().includes('kate') ||
