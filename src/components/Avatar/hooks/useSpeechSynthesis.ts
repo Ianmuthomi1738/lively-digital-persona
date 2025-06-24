@@ -11,50 +11,92 @@ export const useSpeechSynthesis = () => {
   const isInterruptedRef = useRef(false);
   const visemeIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isCleaningUpRef = useRef(false);
 
   const { getEmotionalSettings, processTextForEmotion } = useVoiceEmotions();
   const { selectVoice } = useVoiceSelection();
   const { simulateVisemes } = useVisemeSimulation();
 
-  // Memoized cleanup function for better performance
+  // Enhanced cleanup function with proper error handling
   const cleanup = useCallback(() => {
-    if (cleanupTimeoutRef.current) {
-      clearTimeout(cleanupTimeoutRef.current);
-      cleanupTimeoutRef.current = null;
+    if (isCleaningUpRef.current) {
+      return; // Prevent recursive cleanup
     }
     
-    if (visemeIntervalRef.current) {
-      clearInterval(visemeIntervalRef.current);
-      visemeIntervalRef.current = null;
-    }
-    currentUtteranceRef.current = null;
-    setIsSpeaking(false);
-  }, []);
-
-  // Optimized interrupt function
-  const interrupt = useCallback(() => {
-    if (currentUtteranceRef.current && isSpeaking) {
-      console.log('Interrupting speech synthesis');
-      isInterruptedRef.current = true;
+    isCleaningUpRef.current = true;
+    
+    try {
+      console.log('Starting speech synthesis cleanup');
       
-      try {
-        // Cancel speech immediately
-        speechSynthesis.cancel();
-      } catch (error) {
-        console.error('Error canceling speech:', error);
+      if (cleanupTimeoutRef.current) {
+        clearTimeout(cleanupTimeoutRef.current);
+        cleanupTimeoutRef.current = null;
       }
       
-      // Immediate cleanup
+      if (visemeIntervalRef.current) {
+        clearInterval(visemeIntervalRef.current);
+        visemeIntervalRef.current = null;
+      }
+      
+      // Clear the current utterance reference
+      if (currentUtteranceRef.current) {
+        const utterance = currentUtteranceRef.current;
+        
+        // Remove event listeners to prevent callbacks after cleanup
+        utterance.onstart = null;
+        utterance.onend = null;
+        utterance.onerror = null;
+        utterance.onpause = null;
+        utterance.onresume = null;
+        utterance.onmark = null;
+        utterance.onboundary = null;
+        
+        currentUtteranceRef.current = null;
+      }
+      
+      setIsSpeaking(false);
+      console.log('Speech synthesis cleanup completed');
+      
+    } catch (error) {
+      console.error('Error during speech synthesis cleanup:', error);
+    } finally {
+      isCleaningUpRef.current = false;
+    }
+  }, []);
+
+  // Improved interrupt function with better error handling
+  const interrupt = useCallback(() => {
+    if (!isSpeaking || isCleaningUpRef.current) {
+      return;
+    }
+
+    console.log('Interrupting speech synthesis');
+    isInterruptedRef.current = true;
+    
+    try {
+      // First, cancel any pending speech
+      if (speechSynthesis.speaking || speechSynthesis.pending) {
+        speechSynthesis.cancel();
+      }
+      
+      // Wait a moment for the cancel to take effect, then cleanup
+      setTimeout(() => {
+        cleanup();
+      }, 50);
+      
+    } catch (error) {
+      console.error('Error interrupting speech synthesis:', error);
+      // Force cleanup even if cancel failed
       cleanup();
     }
   }, [isSpeaking, cleanup]);
 
   // Check if speech synthesis is supported
   const isSupported = useMemo(() => {
-    return 'speechSynthesis' in window;
+    return typeof window !== 'undefined' && 'speechSynthesis' in window;
   }, []);
 
-  // Optimized speak function with better error handling and performance
+  // Enhanced speak function with better error handling and state management
   const speak = useCallback(async (
     text: string, 
     options: SpeechOptions = {}
@@ -72,14 +114,16 @@ export const useSpeechSynthesis = () => {
           return;
         }
 
-        // Cancel any ongoing speech immediately
+        // Cancel any ongoing speech and cleanup
         if (isSpeaking) {
+          console.log('Canceling existing speech for new request');
           speechSynthesis.cancel();
           cleanup();
         }
 
         // Reset state
         isInterruptedRef.current = false;
+        isCleaningUpRef.current = false;
         const emotion = options.emotion || { type: 'neutral' };
         
         let emotionalSettings;
@@ -94,73 +138,111 @@ export const useSpeechSynthesis = () => {
           processedText = text;
         }
         
-        // Create utterance with optimized settings
+        // Create utterance with error-safe settings
         const utterance = new SpeechSynthesisUtterance(processedText);
         currentUtteranceRef.current = utterance;
         
-        // Apply settings with validation
+        // Apply settings with validation and bounds checking
         utterance.rate = Math.max(0.1, Math.min(10, emotionalSettings.rate));
         utterance.pitch = Math.max(0, Math.min(2, emotionalSettings.pitch));
         utterance.volume = Math.max(0, Math.min(1, emotionalSettings.volume));
 
-        // Optimized voice selection
+        // Voice selection with error handling
         try {
           selectVoice(emotion, utterance);
         } catch (error) {
-          console.error('Error selecting voice:', error);
+          console.error('Error selecting voice, using default:', error);
         }
 
-        // Event handlers with improved error handling
+        // Enhanced event handlers with proper error boundaries
         utterance.onstart = () => {
-          if (isInterruptedRef.current) return;
+          if (isInterruptedRef.current || isCleaningUpRef.current) {
+            return;
+          }
           
-          console.log('Speech synthesis started');
-          setIsSpeaking(true);
-          options.onStart?.();
-          
-          // Start viseme simulation
-          if (options.onViseme) {
-            try {
-              visemeIntervalRef.current = simulateVisemes(text, emotion, options.onViseme, isInterruptedRef);
-            } catch (error) {
-              console.error('Error starting viseme simulation:', error);
+          try {
+            console.log('Speech synthesis started successfully');
+            setIsSpeaking(true);
+            options.onStart?.();
+            
+            // Start viseme simulation with error handling
+            if (options.onViseme) {
+              try {
+                visemeIntervalRef.current = simulateVisemes(text, emotion, options.onViseme, isInterruptedRef);
+              } catch (error) {
+                console.error('Error starting viseme simulation:', error);
+              }
             }
+          } catch (error) {
+            console.error('Error in speech start handler:', error);
           }
         };
 
         utterance.onend = () => {
-          console.log('Speech synthesis ended');
-          cleanup();
-          
-          if (isInterruptedRef.current) {
-            options.onInterrupted?.();
-          } else {
-            options.onEnd?.();
+          try {
+            console.log('Speech synthesis ended normally');
+            
+            if (isInterruptedRef.current) {
+              options.onInterrupted?.();
+            } else {
+              options.onEnd?.();
+            }
+            
+            cleanup();
+            resolve();
+            
+          } catch (error) {
+            console.error('Error in speech end handler:', error);
+            cleanup();
+            resolve();
           }
-          resolve();
         };
 
         utterance.onerror = (event) => {
-          console.error('Speech synthesis error:', event.error);
-          cleanup();
-          reject(new Error(`Speech synthesis error: ${event.error}`));
-        };
-
-        // Start speaking with minimal delay for better performance
-        const startSpeaking = () => {
-          if (!isInterruptedRef.current) {
-            try {
-              speechSynthesis.speak(utterance);
-            } catch (error) {
-              console.error('Error starting speech synthesis:', error);
-              cleanup();
-              reject(error);
+          try {
+            console.error('Speech synthesis error event:', event.error);
+            cleanup();
+            
+            // Don't reject if we were interrupted, as that's expected
+            if (isInterruptedRef.current) {
+              options.onInterrupted?.();
+              resolve();
+            } else {
+              reject(new Error(`Speech synthesis error: ${event.error}`));
             }
+          } catch (error) {
+            console.error('Error in speech error handler:', error);
+            cleanup();
+            reject(error);
           }
         };
 
-        // Reduced pause for better responsiveness
-        const pauseDelay = Math.min(emotionalSettings.pauseDuration, 100);
+        // Start speaking with enhanced error handling
+        const startSpeaking = () => {
+          if (isInterruptedRef.current || isCleaningUpRef.current) {
+            cleanup();
+            resolve();
+            return;
+          }
+          
+          try {
+            // Double-check that speech synthesis is still available
+            if (!speechSynthesis) {
+              throw new Error('Speech synthesis not available');
+            }
+            
+            console.log('Starting speech synthesis...');
+            speechSynthesis.speak(utterance);
+            
+          } catch (error) {
+            console.error('Error starting speech synthesis:', error);
+            cleanup();
+            reject(error);
+          }
+        };
+
+        // Reduced delay for better responsiveness, with fallback
+        const pauseDelay = Math.min(emotionalSettings?.pauseDuration || 100, 50);
         cleanupTimeoutRef.current = setTimeout(startSpeaking, pauseDelay);
 
       } catch (error) {
@@ -175,6 +257,6 @@ export const useSpeechSynthesis = () => {
     speak, 
     isSpeaking, 
     interrupt,
-    canInterrupt: isSpeaking
+    canInterrupt: isSpeaking && !isCleaningUpRef.current
   };
 };

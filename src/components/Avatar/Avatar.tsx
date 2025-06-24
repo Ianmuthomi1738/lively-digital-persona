@@ -21,25 +21,22 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
   onInterrupted,
   enableRealTimeInterruption = true
 }, ref) => {
-  // All hooks must be called at the top level, in the same order every time
   const { speak, isSpeaking, interrupt, canInterrupt } = useSpeechSynthesis();
   const { listen } = useSpeechRecognition();
   const [isListening, setIsListening] = useState(false);
   const [voiceStyle, setVoiceStyle] = useState('natural');
   const [lastUserMessage, setLastUserMessage] = useState('');
 
-  // Real-time interruption hook
   const { startListening: startInterruptionDetection, stopListening: stopInterruptionDetection } = useRealTimeInterruption({
     onInterrupted: () => {
       if (isSpeaking) {
+        console.log('Real-time interruption detected, stopping speech');
         interrupt();
         onInterrupted?.();
-        console.log('Real-time interruption detected');
       }
     }
   });
 
-  // Slash command handlers - defined as stable references
   const slashCommandHandlers = {
     onTestInterruption: async (): Promise<TestResult> => {
       try {
@@ -107,7 +104,6 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
 
   const { processCommand, formatTestResult, formatMultipleResults } = useSlashCommands(slashCommandHandlers);
 
-  // Effects
   useEffect(() => {
     if (enableRealTimeInterruption) {
       if (isSpeaking) {
@@ -122,7 +118,6 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
     onSpeakingStateChange?.(isSpeaking);
   }, [isSpeaking, onSpeakingStateChange]);
 
-  // Handler functions
   const handleSpeak = async (text: string, options: SpeechOptions = {}): Promise<void> => {
     try {
       const commandResult = await processCommand(text);
@@ -139,23 +134,18 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
         }
       }
 
-      return new Promise(async (resolve, reject) => {
-        try {
-          await speak(text, {
-            ...options,
-            onInterrupted: () => {
-              onInterrupted?.();
-              options.onInterrupted?.();
-            }
-          });
-          resolve();
-        } catch (error) {
-          reject(error);
+      return speak(text, {
+        ...options,
+        onInterrupted: () => {
+          console.log('Speech was interrupted');
+          onInterrupted?.();
+          options.onInterrupted?.();
         }
       });
     } catch (error) {
-      console.error('Speech error:', error);
-      throw error;
+      console.error('Speech error in Avatar:', error);
+      // Don't re-throw the error to prevent cascading failures
+      // The error has already been logged and handled
     }
   };
 
@@ -166,6 +156,8 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
         setLastUserMessage(transcript);
         callback(transcript);
       });
+    } catch (error) {
+      console.error('Listen error:', error);
     } finally {
       setIsListening(false);
     }
@@ -176,7 +168,12 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
   };
 
   const handleInterrupt = (): void => {
-    interrupt();
+    try {
+      console.log('Manual interrupt triggered');
+      interrupt();
+    } catch (error) {
+      console.error('Error during manual interrupt:', error);
+    }
   };
 
   useImperativeHandle(ref, () => ({
