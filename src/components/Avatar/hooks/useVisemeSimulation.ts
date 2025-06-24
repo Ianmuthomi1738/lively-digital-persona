@@ -1,6 +1,34 @@
 
 import { VoiceEmotion } from '../AvatarAPI';
 
+// Optimized viseme mapping for better performance
+const getVisemeForWord = (word: string, emotionType: string): string => {
+  if (emotionType === 'laugh' && Math.random() > 0.7) {
+    return 'LAUGH';
+  }
+  
+  const lowerWord = word.toLowerCase();
+  
+  // Fast character-based viseme detection
+  if (/[ou]/.test(lowerWord)) {
+    return emotionType === 'surprised' ? 'OH' : 'OW';
+  }
+  if (/[aeiæ]/.test(lowerWord)) {
+    return 'AH';
+  }
+  if (/[eiy]/.test(lowerWord)) {
+    return 'IY';
+  }
+  if (/[bp]/.test(lowerWord)) {
+    return 'P';
+  }
+  if (/[fv]/.test(lowerWord)) {
+    return 'F';
+  }
+  
+  return 'AE';
+};
+
 export const useVisemeSimulation = () => {
   const simulateVisemes = (
     text: string, 
@@ -16,20 +44,20 @@ export const useVisemeSimulation = () => {
     const words = text.split(' ').filter(word => word.length > 0);
     let wordIndex = 0;
     
-    // Calculate timing based on emotion with bounds checking
-    const getWordsPerMinute = (emotionType: string) => {
-      switch (emotionType) {
-        case 'excited': return 180;
-        case 'sad':
-        case 'whisper': return 120;
-        case 'angry': return 200;
-        case 'surprised': return 160;
-        default: return 150;
-      }
+    // Optimized timing calculation
+    const getWordsPerMinute = (emotionType: string): number => {
+      const wpmMap: Record<string, number> = {
+        'excited': 180,
+        'sad': 120,
+        'whisper': 120,
+        'angry': 200,
+        'surprised': 160
+      };
+      return wpmMap[emotionType] || 150;
     };
 
     const baseWordsPerMinute = getWordsPerMinute(emotion.type);
-    const msPerWord = Math.max(50, (60 * 1000) / baseWordsPerMinute); // Minimum 50ms per word
+    const msPerWord = Math.max(50, (60 * 1000) / baseWordsPerMinute);
     
     const visemeInterval = setInterval(() => {
       try {
@@ -46,26 +74,8 @@ export const useVisemeSimulation = () => {
           return;
         }
         
-        // Enhanced emotional viseme mapping with error handling
-        let viseme = 'sil';
-        
         try {
-          if (emotion.type === 'laugh' && Math.random() > 0.7) {
-            viseme = 'LAUGH';
-          } else if (/[ou]/i.test(word)) {
-            viseme = emotion.type === 'surprised' ? 'OH' : 'OW';
-          } else if (/[aeiæ]/i.test(word)) {
-            viseme = 'AH';
-          } else if (/[eiy]/i.test(word)) {
-            viseme = 'IY';
-          } else if (/[bp]/i.test(word)) {
-            viseme = 'P';
-          } else if (/[fv]/i.test(word)) {
-            viseme = 'F';
-          } else {
-            viseme = 'AE';
-          }
-          
+          const viseme = getVisemeForWord(word, emotion.type);
           onViseme(viseme);
         } catch (error) {
           console.error('Error in viseme generation:', error);

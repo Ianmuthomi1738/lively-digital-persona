@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { VoiceEmotion, SpeechOptions } from '../AvatarAPI';
 import { useVoiceEmotions } from './useVoiceEmotions';
 import { useVoiceSelection } from './useVoiceSelection';
@@ -10,12 +10,19 @@ export const useSpeechSynthesis = () => {
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const isInterruptedRef = useRef(false);
   const visemeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { getEmotionalSettings, processTextForEmotion } = useVoiceEmotions();
   const { selectVoice } = useVoiceSelection();
   const { simulateVisemes } = useVisemeSimulation();
 
+  // Memoized cleanup function for better performance
   const cleanup = useCallback(() => {
+    if (cleanupTimeoutRef.current) {
+      clearTimeout(cleanupTimeoutRef.current);
+      cleanupTimeoutRef.current = null;
+    }
+    
     if (visemeIntervalRef.current) {
       clearInterval(visemeIntervalRef.current);
       visemeIntervalRef.current = null;
@@ -24,28 +31,38 @@ export const useSpeechSynthesis = () => {
     setIsSpeaking(false);
   }, []);
 
+  // Optimized interrupt function
   const interrupt = useCallback(() => {
     if (currentUtteranceRef.current && isSpeaking) {
       console.log('Interrupting speech synthesis');
       isInterruptedRef.current = true;
       
       try {
+        // Cancel speech immediately
         speechSynthesis.cancel();
       } catch (error) {
         console.error('Error canceling speech:', error);
       }
       
+      // Immediate cleanup
       cleanup();
     }
   }, [isSpeaking, cleanup]);
 
+  // Check if speech synthesis is supported
+  const isSupported = useMemo(() => {
+    return 'speechSynthesis' in window;
+  }, []);
+
+  // Optimized speak function with better error handling and performance
   const speak = useCallback(async (
     text: string, 
     options: SpeechOptions = {}
   ): Promise<void> => {
     return new Promise((resolve, reject) => {
       try {
-        if (!('speechSynthesis' in window)) {
+        // Early validation
+        if (!isSupported) {
           reject(new Error('Speech synthesis not supported in this browser'));
           return;
         }
@@ -55,12 +72,13 @@ export const useSpeechSynthesis = () => {
           return;
         }
 
-        // Cancel any ongoing speech
+        // Cancel any ongoing speech immediately
         if (isSpeaking) {
           speechSynthesis.cancel();
           cleanup();
         }
 
+        // Reset state
         isInterruptedRef.current = false;
         const emotion = options.emotion || { type: 'neutral' };
         
@@ -76,44 +94,23 @@ export const useSpeechSynthesis = () => {
           processedText = text;
         }
         
+        // Create utterance with optimized settings
         const utterance = new SpeechSynthesisUtterance(processedText);
         currentUtteranceRef.current = utterance;
         
-        // Apply emotional voice settings with bounds checking
+        // Apply settings with validation
         utterance.rate = Math.max(0.1, Math.min(10, emotionalSettings.rate));
         utterance.pitch = Math.max(0, Math.min(2, emotionalSettings.pitch));
         utterance.volume = Math.max(0, Math.min(1, emotionalSettings.volume));
 
-        // Handle voice loading and selection
-        const handleVoiceSelection = () => {
-          try {
-            const voices = speechSynthesis.getVoices();
-            if (voices.length === 0) {
-              console.warn('No voices available for speech synthesis');
-            } else {
-              selectVoice(emotion, utterance);
-            }
-          } catch (error) {
-            console.error('Error selecting voice:', error);
-          }
-        };
-
-        // Wait for voices to load if they're not ready
-        if (speechSynthesis.getVoices().length === 0) {
-          const voiceLoadTimeout = setTimeout(() => {
-            console.warn('Voice loading timeout - proceeding with default voice');
-            speechSynthesis.onvoiceschanged = null;
-          }, 3000);
-
-          speechSynthesis.onvoiceschanged = () => {
-            clearTimeout(voiceLoadTimeout);
-            handleVoiceSelection();
-            speechSynthesis.onvoiceschanged = null;
-          };
-        } else {
-          handleVoiceSelection();
+        // Optimized voice selection
+        try {
+          selectVoice(emotion, utterance);
+        } catch (error) {
+          console.error('Error selecting voice:', error);
         }
 
+        // Event handlers with improved error handling
         utterance.onstart = () => {
           if (isInterruptedRef.current) return;
           
@@ -121,7 +118,7 @@ export const useSpeechSynthesis = () => {
           setIsSpeaking(true);
           options.onStart?.();
           
-          // Enhanced viseme simulation with cleanup
+          // Start viseme simulation
           if (options.onViseme) {
             try {
               visemeIntervalRef.current = simulateVisemes(text, emotion, options.onViseme, isInterruptedRef);
@@ -149,8 +146,8 @@ export const useSpeechSynthesis = () => {
           reject(new Error(`Speech synthesis error: ${event.error}`));
         };
 
-        // Add natural pause before speaking based on emotion
-        const pauseTimeout = setTimeout(() => {
+        // Start speaking with minimal delay for better performance
+        const startSpeaking = () => {
           if (!isInterruptedRef.current) {
             try {
               speechSynthesis.speak(utterance);
@@ -160,12 +157,11 @@ export const useSpeechSynthesis = () => {
               reject(error);
             }
           }
-        }, emotionalSettings.pauseDuration);
+        };
 
-        // Store timeout for cleanup
-        const timeoutCleanup = () => clearTimeout(pauseTimeout);
-        utterance.addEventListener('start', timeoutCleanup, { once: true });
-        utterance.addEventListener('error', timeoutCleanup, { once: true });
+        // Reduced pause for better responsiveness
+        const pauseDelay = Math.min(emotionalSettings.pauseDuration, 100);
+        cleanupTimeoutRef.current = setTimeout(startSpeaking, pauseDelay);
 
       } catch (error) {
         console.error('Speech synthesis setup error:', error);
@@ -173,7 +169,7 @@ export const useSpeechSynthesis = () => {
         reject(error);
       }
     });
-  }, [getEmotionalSettings, processTextForEmotion, selectVoice, simulateVisemes, isSpeaking, cleanup]);
+  }, [getEmotionalSettings, processTextForEmotion, selectVoice, simulateVisemes, isSpeaking, cleanup, isSupported]);
 
   return { 
     speak, 

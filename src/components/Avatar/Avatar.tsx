@@ -1,5 +1,5 @@
 
-import React, { useEffect, forwardRef, useImperativeHandle } from 'react';
+import React, { useEffect, forwardRef, useImperativeHandle, useState, useRef } from 'react';
 import { AvatarAPI, SpeechOptions } from './AvatarAPI';
 import { SiriAvatar } from './SiriAvatar';
 import { VoiceSettings } from './VoiceSettings';
@@ -21,13 +21,14 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
   onInterrupted,
   enableRealTimeInterruption = true
 }, ref) => {
+  // All hooks must be called at the top level, in the same order every time
   const { speak, isSpeaking, interrupt, canInterrupt } = useSpeechSynthesis();
   const { listen } = useSpeechRecognition();
-  const [isListening, setIsListening] = React.useState(false);
-  const [voiceStyle, setVoiceStyle] = React.useState('natural');
-  const [lastUserMessage, setLastUserMessage] = React.useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [voiceStyle, setVoiceStyle] = useState('natural');
+  const [lastUserMessage, setLastUserMessage] = useState('');
 
-  // Real-time interruption setup
+  // Real-time interruption hook
   const { startListening: startInterruptionDetection, stopListening: stopInterruptionDetection } = useRealTimeInterruption({
     onInterrupted: () => {
       if (isSpeaking) {
@@ -38,28 +39,14 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
     }
   });
 
-  // Start interruption detection when speaking
-  useEffect(() => {
-    if (enableRealTimeInterruption) {
-      if (isSpeaking) {
-        startInterruptionDetection();
-      } else {
-        stopInterruptionDetection();
-      }
-    }
-  }, [isSpeaking, enableRealTimeInterruption, startInterruptionDetection, stopInterruptionDetection]);
-
-  // Slash command handlers
+  // Slash command handlers - defined as stable references
   const slashCommandHandlers = {
     onTestInterruption: async (): Promise<TestResult> => {
       try {
-        // Simulate long speech
         const longText = "This is a long test message that should be interrupted when the user begins to speak. We're testing the real-time interruption capability to ensure it works correctly in all scenarios.";
         
-        // Start speaking and wait a moment
         const speakPromise = speak(longText);
         
-        // Simulate interruption after 1 second
         setTimeout(() => {
           if (isSpeaking) {
             interrupt();
@@ -120,41 +107,56 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
 
   const { processCommand, formatTestResult, formatMultipleResults } = useSlashCommands(slashCommandHandlers);
 
+  // Effects
+  useEffect(() => {
+    if (enableRealTimeInterruption) {
+      if (isSpeaking) {
+        startInterruptionDetection();
+      } else {
+        stopInterruptionDetection();
+      }
+    }
+  }, [isSpeaking, enableRealTimeInterruption, startInterruptionDetection, stopInterruptionDetection]);
+
   useEffect(() => {
     onSpeakingStateChange?.(isSpeaking);
   }, [isSpeaking, onSpeakingStateChange]);
 
+  // Handler functions
   const handleSpeak = async (text: string, options: SpeechOptions = {}): Promise<void> => {
-    // Check for slash commands
-    const commandResult = await processCommand(text);
-    
-    if (commandResult !== null) {
-      if (typeof commandResult === 'string') {
-        return speak(commandResult, options);
-      } else if (Array.isArray(commandResult)) {
-        const formatted = formatMultipleResults(commandResult);
-        return speak(formatted, options);
-      } else {
-        const formatted = formatTestResult(commandResult);
-        return speak(formatted, options);
+    try {
+      const commandResult = await processCommand(text);
+      
+      if (commandResult !== null) {
+        if (typeof commandResult === 'string') {
+          return speak(commandResult, options);
+        } else if (Array.isArray(commandResult)) {
+          const formatted = formatMultipleResults(commandResult);
+          return speak(formatted, options);
+        } else {
+          const formatted = formatTestResult(commandResult);
+          return speak(formatted, options);
+        }
       }
-    }
 
-    // Regular speech
-    return new Promise(async (resolve, reject) => {
-      try {
-        await speak(text, {
-          ...options,
-          onInterrupted: () => {
-            onInterrupted?.();
-            options.onInterrupted?.();
-          }
-        });
-        resolve();
-      } catch (error) {
-        reject(error);
-      }
-    });
+      return new Promise(async (resolve, reject) => {
+        try {
+          await speak(text, {
+            ...options,
+            onInterrupted: () => {
+              onInterrupted?.();
+              options.onInterrupted?.();
+            }
+          });
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+    } catch (error) {
+      console.error('Speech error:', error);
+      throw error;
+    }
   };
 
   const handleListen = async (callback: (transcript: string) => void): Promise<void> => {
@@ -187,7 +189,6 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
 
   return (
     <div className="relative w-full max-w-md mx-auto flex flex-col items-center justify-center p-4 sm:p-6">
-      {/* Enhanced mobile-optimized background */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden">
         <div className="absolute inset-0 opacity-20 sm:opacity-30">
           <div className="absolute top-1/4 left-1/4 w-20 h-20 sm:w-32 sm:h-32 bg-purple-500/20 rounded-full blur-xl animate-pulse" />
