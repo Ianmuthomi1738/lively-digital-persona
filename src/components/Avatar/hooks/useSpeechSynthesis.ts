@@ -41,15 +41,27 @@ export const useSpeechSynthesis = () => {
           return;
         }
 
+        // Better mobile handling
         if (isSpeaking) {
           console.log('Canceling existing speech for new request');
-          if (isMobileRef.current) {
-            speechSynthesis.pause();
-            setTimeout(() => speechSynthesis.cancel(), 50);
-          } else {
-            speechSynthesis.cancel();
+          try {
+            if (isMobileRef.current) {
+              // More gentle cancellation for mobile
+              if (speechSynthesis.speaking) {
+                speechSynthesis.pause();
+                setTimeout(() => {
+                  if (speechSynthesis.paused || speechSynthesis.speaking) {
+                    speechSynthesis.cancel();
+                  }
+                }, 100);
+              }
+            } else {
+              speechSynthesis.cancel();
+            }
+            cleanup();
+          } catch (error) {
+            console.warn('Error during speech cancellation:', error);
           }
-          cleanup();
         }
 
         isInterruptedRef.current = false;
@@ -90,7 +102,23 @@ export const useSpeechSynthesis = () => {
             }
             
             console.log('Starting speech synthesis...');
-            speechSynthesis.speak(utterance);
+            
+            // Better mobile compatibility
+            if (isMobileRef.current) {
+              // Ensure speech synthesis is ready on mobile
+              if (speechSynthesis.paused) {
+                speechSynthesis.resume();
+              }
+              
+              // Add small delay for mobile stability
+              setTimeout(() => {
+                if (!isInterruptedRef.current && !isCleaningUpRef.current) {
+                  speechSynthesis.speak(utterance);
+                }
+              }, 50);
+            } else {
+              speechSynthesis.speak(utterance);
+            }
             
           } catch (error) {
             console.error('Error starting speech synthesis:', error);
@@ -99,7 +127,8 @@ export const useSpeechSynthesis = () => {
           }
         };
 
-        const delay = isMobileRef.current ? 50 : Math.min(emotionalSettings?.pauseDuration || 100, 30);
+        // Shorter delay for better responsiveness
+        const delay = isMobileRef.current ? 100 : 50;
         setTimeout(startSpeaking, delay);
 
       } catch (error) {
