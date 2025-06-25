@@ -10,46 +10,48 @@ export const useSpeechSynthesis = () => {
   const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const isInterruptedRef = useRef(false);
   const visemeIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const cleanupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isCleaningUpRef = useRef(false);
+  const isMobileRef = useRef(false);
 
   const { getEmotionalSettings, processTextForEmotion } = useVoiceEmotions();
   const { selectVoice } = useVoiceSelection();
   const { simulateVisemes } = useVisemeSimulation();
 
-  // Enhanced cleanup function with proper error handling
+  // Detect mobile browser
+  const isMobile = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const mobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+    isMobileRef.current = mobile;
+    return mobile;
+  }, []);
+
+  // Enhanced cleanup function with mobile-safe handling
   const cleanup = useCallback(() => {
-    if (isCleaningUpRef.current) {
-      return; // Prevent recursive cleanup
-    }
+    if (isCleaningUpRef.current) return;
     
     isCleaningUpRef.current = true;
     
     try {
       console.log('Starting speech synthesis cleanup');
       
-      if (cleanupTimeoutRef.current) {
-        clearTimeout(cleanupTimeoutRef.current);
-        cleanupTimeoutRef.current = null;
-      }
-      
       if (visemeIntervalRef.current) {
         clearInterval(visemeIntervalRef.current);
         visemeIntervalRef.current = null;
       }
       
-      // Clear the current utterance reference
+      // Mobile-safe utterance cleanup
       if (currentUtteranceRef.current) {
         const utterance = currentUtteranceRef.current;
         
-        // Remove event listeners to prevent callbacks after cleanup
-        utterance.onstart = null;
-        utterance.onend = null;
-        utterance.onerror = null;
-        utterance.onpause = null;
-        utterance.onresume = null;
-        utterance.onmark = null;
-        utterance.onboundary = null;
+        // Only remove listeners if they exist (mobile browsers can be finicky)
+        try {
+          utterance.onstart = null;
+          utterance.onend = null;
+          utterance.onerror = null;
+        } catch (e) {
+          console.warn('Could not clear utterance listeners:', e);
+        }
         
         currentUtteranceRef.current = null;
       }
@@ -64,46 +66,53 @@ export const useSpeechSynthesis = () => {
     }
   }, []);
 
-  // Improved interrupt function with better error handling
+  // Mobile-safe interrupt function
   const interrupt = useCallback(() => {
-    if (!isSpeaking || isCleaningUpRef.current) {
-      return;
-    }
+    if (!isSpeaking || isCleaningUpRef.current) return;
 
     console.log('Interrupting speech synthesis');
     isInterruptedRef.current = true;
     
     try {
-      // First, cancel any pending speech
-      if (speechSynthesis.speaking || speechSynthesis.pending) {
-        speechSynthesis.cancel();
+      // Mobile browsers need gentler cancellation
+      if (isMobileRef.current) {
+        // For mobile, just stop without aggressive cancellation
+        if (speechSynthesis.speaking) {
+          speechSynthesis.pause();
+          setTimeout(() => {
+            if (speechSynthesis.paused) {
+              speechSynthesis.cancel();
+            }
+            cleanup();
+          }, 100);
+        } else {
+          cleanup();
+        }
+      } else {
+        // Desktop browsers can handle immediate cancellation
+        if (speechSynthesis.speaking || speechSynthesis.pending) {
+          speechSynthesis.cancel();
+        }
+        setTimeout(cleanup, 50);
       }
-      
-      // Wait a moment for the cancel to take effect, then cleanup
-      setTimeout(() => {
-        cleanup();
-      }, 50);
       
     } catch (error) {
       console.error('Error interrupting speech synthesis:', error);
-      // Force cleanup even if cancel failed
       cleanup();
     }
   }, [isSpeaking, cleanup]);
 
-  // Check if speech synthesis is supported
   const isSupported = useMemo(() => {
     return typeof window !== 'undefined' && 'speechSynthesis' in window;
   }, []);
 
-  // Enhanced speak function with better error handling and state management
+  // Enhanced speak function with mobile optimizations and natural voice
   const speak = useCallback(async (
     text: string, 
     options: SpeechOptions = {}
   ): Promise<void> => {
     return new Promise((resolve, reject) => {
       try {
-        // Early validation
         if (!isSupported) {
           reject(new Error('Speech synthesis not supported in this browser'));
           return;
@@ -114,10 +123,15 @@ export const useSpeechSynthesis = () => {
           return;
         }
 
-        // Cancel any ongoing speech and cleanup
+        // Cancel any ongoing speech with mobile-safe handling
         if (isSpeaking) {
           console.log('Canceling existing speech for new request');
-          speechSynthesis.cancel();
+          if (isMobileRef.current) {
+            speechSynthesis.pause();
+            setTimeout(() => speechSynthesis.cancel(), 50);
+          } else {
+            speechSynthesis.cancel();
+          }
           cleanup();
         }
 
@@ -138,34 +152,33 @@ export const useSpeechSynthesis = () => {
           processedText = text;
         }
         
-        // Create utterance with error-safe settings
+        // Create utterance with mobile-optimized settings
         const utterance = new SpeechSynthesisUtterance(processedText);
         currentUtteranceRef.current = utterance;
         
-        // Apply settings with validation and bounds checking
-        utterance.rate = Math.max(0.1, Math.min(10, emotionalSettings.rate));
-        utterance.pitch = Math.max(0, Math.min(2, emotionalSettings.pitch));
-        utterance.volume = Math.max(0, Math.min(1, emotionalSettings.volume));
+        // Apply natural voice settings with mobile optimization
+        const mobileRateAdjust = isMobileRef.current ? 0.9 : 1.0; // Slightly slower on mobile
+        utterance.rate = Math.max(0.3, Math.min(2.0, emotionalSettings.rate * mobileRateAdjust));
+        utterance.pitch = Math.max(0.5, Math.min(1.5, emotionalSettings.pitch));
+        utterance.volume = Math.max(0.3, Math.min(1, emotionalSettings.volume));
 
-        // Voice selection with error handling
+        // Enhanced voice selection for naturalness
         try {
           selectVoice(emotion, utterance);
         } catch (error) {
           console.error('Error selecting voice, using default:', error);
         }
 
-        // Enhanced event handlers with proper error boundaries
+        // Mobile-optimized event handlers
         utterance.onstart = () => {
-          if (isInterruptedRef.current || isCleaningUpRef.current) {
-            return;
-          }
+          if (isInterruptedRef.current || isCleaningUpRef.current) return;
           
           try {
             console.log('Speech synthesis started successfully');
             setIsSpeaking(true);
             options.onStart?.();
             
-            // Start viseme simulation with error handling
+            // Start viseme simulation with mobile optimization
             if (options.onViseme) {
               try {
                 visemeIntervalRef.current = simulateVisemes(text, emotion, options.onViseme, isInterruptedRef);
@@ -188,7 +201,12 @@ export const useSpeechSynthesis = () => {
               options.onEnd?.();
             }
             
-            cleanup();
+            // Delayed cleanup for mobile stability
+            if (isMobileRef.current) {
+              setTimeout(cleanup, 100);
+            } else {
+              cleanup();
+            }
             resolve();
             
           } catch (error) {
@@ -201,13 +219,14 @@ export const useSpeechSynthesis = () => {
         utterance.onerror = (event) => {
           try {
             console.error('Speech synthesis error event:', event.error);
-            cleanup();
             
-            // Don't reject if we were interrupted, as that's expected
-            if (isInterruptedRef.current) {
+            // Mobile browsers often throw errors during interruption - handle gracefully
+            if (isInterruptedRef.current || (isMobileRef.current && event.error === 'interrupted')) {
               options.onInterrupted?.();
+              cleanup();
               resolve();
             } else {
+              cleanup();
               reject(new Error(`Speech synthesis error: ${event.error}`));
             }
           } catch (error) {
@@ -217,7 +236,7 @@ export const useSpeechSynthesis = () => {
           }
         };
 
-        // Start speaking with enhanced error handling
+        // Mobile-optimized speech start with reduced delay
         const startSpeaking = () => {
           if (isInterruptedRef.current || isCleaningUpRef.current) {
             cleanup();
@@ -226,7 +245,6 @@ export const useSpeechSynthesis = () => {
           }
           
           try {
-            // Double-check that speech synthesis is still available
             if (!speechSynthesis) {
               throw new Error('Speech synthesis not available');
             }
@@ -241,9 +259,9 @@ export const useSpeechSynthesis = () => {
           }
         };
 
-        // Reduced delay for better responsiveness, with fallback
-        const pauseDelay = Math.min(emotionalSettings?.pauseDuration || 100, 50);
-        cleanupTimeoutRef.current = setTimeout(startSpeaking, pauseDelay);
+        // Minimal delay for mobile optimization
+        const delay = isMobileRef.current ? 50 : Math.min(emotionalSettings?.pauseDuration || 100, 30);
+        setTimeout(startSpeaking, delay);
 
       } catch (error) {
         console.error('Speech synthesis setup error:', error);
@@ -257,6 +275,7 @@ export const useSpeechSynthesis = () => {
     speak, 
     isSpeaking, 
     interrupt,
-    canInterrupt: isSpeaking && !isCleaningUpRef.current
+    canInterrupt: isSpeaking && !isCleaningUpRef.current,
+    isMobile
   };
 };

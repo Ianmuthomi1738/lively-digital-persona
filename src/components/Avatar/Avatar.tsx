@@ -1,4 +1,3 @@
-
 import React, { useEffect, forwardRef, useImperativeHandle, useState, useRef } from 'react';
 import { AvatarAPI, SpeechOptions } from './AvatarAPI';
 import { SiriAvatar } from './SiriAvatar';
@@ -21,7 +20,7 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
   onInterrupted,
   enableRealTimeInterruption = true
 }, ref) => {
-  const { speak, isSpeaking, interrupt, canInterrupt } = useSpeechSynthesis();
+  const { speak, isSpeaking, interrupt, canInterrupt, isMobile } = useSpeechSynthesis();
   const { listen } = useSpeechRecognition();
   const [isListening, setIsListening] = useState(false);
   const [voiceStyle, setVoiceStyle] = useState('natural');
@@ -105,14 +104,14 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
   const { processCommand, formatTestResult, formatMultipleResults } = useSlashCommands(slashCommandHandlers);
 
   useEffect(() => {
-    if (enableRealTimeInterruption) {
+    if (enableRealTimeInterruption && !isMobile) { // Disable on mobile for stability
       if (isSpeaking) {
         startInterruptionDetection();
       } else {
         stopInterruptionDetection();
       }
     }
-  }, [isSpeaking, enableRealTimeInterruption, startInterruptionDetection, stopInterruptionDetection]);
+  }, [isSpeaking, enableRealTimeInterruption, isMobile, startInterruptionDetection, stopInterruptionDetection]);
 
   useEffect(() => {
     onSpeakingStateChange?.(isSpeaking);
@@ -144,8 +143,7 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
       });
     } catch (error) {
       console.error('Speech error in Avatar:', error);
-      // Don't re-throw the error to prevent cascading failures
-      // The error has already been logged and handled
+      // Silently handle errors to prevent cascading failures
     }
   };
 
@@ -186,15 +184,16 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
 
   return (
     <div className="relative w-full max-w-md mx-auto flex flex-col items-center justify-center p-4 sm:p-6">
+      {/* Mobile-optimized background */}
       <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 rounded-2xl sm:rounded-3xl overflow-hidden">
-        <div className="absolute inset-0 opacity-20 sm:opacity-30">
-          <div className="absolute top-1/4 left-1/4 w-20 h-20 sm:w-32 sm:h-32 bg-purple-500/20 rounded-full blur-xl animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/4 w-16 h-16 sm:w-24 sm:h-24 bg-blue-500/20 rounded-full blur-xl animate-pulse delay-1000" />
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-28 h-28 sm:w-40 sm:h-40 bg-gradient-radial from-white/5 to-transparent rounded-full" />
+        <div className="absolute inset-0 opacity-10 sm:opacity-30">
+          <div className="absolute top-1/4 left-1/4 w-16 h-16 sm:w-32 sm:h-32 bg-purple-500/20 rounded-full blur-xl animate-pulse" />
+          <div className="absolute bottom-1/4 right-1/4 w-12 h-12 sm:w-24 sm:h-24 bg-blue-500/20 rounded-full blur-xl animate-pulse delay-1000" />
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-20 h-20 sm:w-40 sm:h-40 bg-gradient-radial from-white/5 to-transparent rounded-full" />
         </div>
       </div>
 
-      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10">
+      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-10">
         <VoiceSettings 
           currentVoice={voiceStyle}
           onVoiceChange={setVoiceStyle}
@@ -202,10 +201,10 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
       </div>
 
       {canInterrupt && (
-        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10">
+        <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10">
           <button
             onClick={handleInterrupt}
-            className="bg-red-500/80 hover:bg-red-600/80 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium transition-all duration-200 shadow-lg"
+            className="bg-red-500/80 hover:bg-red-600/80 backdrop-blur-sm text-white px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-medium transition-all duration-200 shadow-lg touch-manipulation"
           >
             Stop
           </button>
@@ -219,6 +218,13 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
           voiceStyle={voiceStyle}
         />
       </div>
+
+      {/* Mobile stability indicator */}
+      {isMobile && (
+        <div className="absolute bottom-2 left-2 text-xs text-white/50">
+          Mobile Mode
+        </div>
+      )}
     </div>
   );
 });
