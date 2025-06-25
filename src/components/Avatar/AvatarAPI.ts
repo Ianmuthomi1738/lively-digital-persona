@@ -12,29 +12,20 @@ export interface SpeechOptions {
   onInterrupted?: () => void;
 }
 
-export interface WebRTCCapabilities {
-  startVideoCall: () => Promise<RTCSessionDescriptionInit>;
-  answerVideoCall: (offer: RTCSessionDescriptionInit) => Promise<RTCSessionDescriptionInit>;
-  endVideoCall: () => void;
-  toggleVideo: () => void;
-  toggleAudio: () => void;
-  isVideoCallActive: boolean;
-}
-
 export interface TestResult {
   name: string;
   status: 'PASS' | 'FAIL';
   details?: string;
 }
 
-export interface AvatarAPI extends WebRTCCapabilities {
+export interface AvatarAPI {
   speak(text: string, options?: SpeechOptions): Promise<void>;
   listen(onResult: (transcript: string) => void): Promise<void>;
   setExpression(name: 'neutral' | 'happy' | 'sad' | 'thinking' | 'surprised'): void;
   interrupt(): void;
   canInterrupt: boolean;
   
-  // Testing capabilities
+  // New testing capabilities
   testInterruption?(): Promise<TestResult>;
   testMemory?(): Promise<TestResult>;
   testFormatting?(): Promise<TestResult>;
