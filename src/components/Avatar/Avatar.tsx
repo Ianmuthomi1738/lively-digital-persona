@@ -9,6 +9,7 @@ import { useSlashCommands } from './hooks/useSlashCommands';
 import { useAvatarState } from './hooks/useAvatarState';
 import { useSlashCommandHandlers } from './hooks/useSlashCommandHandlers';
 import { useAvatarAPI } from './hooks/useAvatarAPI';
+import { useWebRTC } from './hooks/useWebRTC';
 import { AvatarBackground } from './components/AvatarBackground';
 import { AvatarControls } from './components/AvatarControls';
 
@@ -17,13 +18,15 @@ interface AvatarProps {
   onSpeakingStateChange?: (isSpeaking: boolean) => void;
   onInterrupted?: () => void;
   enableRealTimeInterruption?: boolean;
+  enableWebRTC?: boolean;
 }
 
 export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({ 
   expression = 'neutral',
   onSpeakingStateChange,
   onInterrupted,
-  enableRealTimeInterruption = true
+  enableRealTimeInterruption = true,
+  enableWebRTC = false
 }, ref) => {
   const { speak, isSpeaking, interrupt, canInterrupt, isMobile } = useSpeechSynthesis();
   const { listen } = useSpeechRecognition();
@@ -35,6 +38,12 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
     lastUserMessage,
     setLastUserMessage
   } = useAvatarState();
+
+  // WebRTC integration
+  const webRTC = useWebRTC({
+    enableVideo: enableWebRTC,
+    enableAudio: enableWebRTC
+  });
 
   const { startListening: startInterruptionDetection, stopListening: stopInterruptionDetection } = useRealTimeInterruption({
     onInterrupted: () => {
@@ -119,12 +128,34 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
     }
   };
 
+  // WebRTC handlers
+  const handleStartVideoCall = async (): Promise<RTCSessionDescriptionInit> => {
+    return await webRTC.createOffer();
+  };
+
+  const handleAnswerVideoCall = async (offer: RTCSessionDescriptionInit): Promise<RTCSessionDescriptionInit> => {
+    return await webRTC.createAnswer(offer);
+  };
+
+  const handleEndVideoCall = (): void => {
+    webRTC.disconnect();
+  };
+
   const { createAvatarAPI } = useAvatarAPI(
     handleSpeak,
     handleListen,
     handleSetExpression,
     handleInterrupt,
-    canInterrupt
+    canInterrupt,
+    // WebRTC capabilities
+    {
+      startVideoCall: handleStartVideoCall,
+      answerVideoCall: handleAnswerVideoCall,
+      endVideoCall: handleEndVideoCall,
+      toggleVideo: webRTC.toggleVideo,
+      toggleAudio: webRTC.toggleAudio,
+      isVideoCallActive: webRTC.state.isConnected
+    }
   );
 
   createAvatarAPI(ref);
@@ -148,6 +179,14 @@ export const Avatar = forwardRef<AvatarAPI, AvatarProps>(({
           voiceStyle={voiceStyle}
         />
       </div>
+
+      {/* WebRTC Video Elements (hidden by default, can be shown in specialized components) */}
+      {enableWebRTC && (
+        <div className="hidden">
+          <video ref={webRTC.localVideoRef} autoPlay muted playsInline />
+          <video ref={webRTC.remoteVideoRef} autoPlay playsInline />
+        </div>
+      )}
     </div>
   );
 });
